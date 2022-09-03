@@ -2,6 +2,9 @@
 venv
 .idea
 
+/d-all-Codal-letters/
+
+
 # General
 .DS_Store
 **/.DS_Store
