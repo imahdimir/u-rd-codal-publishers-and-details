@@ -4,19 +4,20 @@
 
 ##
 
-from githubdata import GithubData
+import asyncio
+from functools import partial
+
 import pandas as pd
-from persiantools.characters import fa_to_ar
+from githubdata import GithubData
 from mirutil import async_requests as areq
 from mirutil import utils as mu
-from functools import partial
-import asyncio
 from mirutil.df_utils import save_as_prq_wo_index as sprq
+from persiantools.characters import fa_to_ar
 
 
 class RepoUrl :
     targ = 'https://github.com/imahdimir/raw-d-codal_ir-nasheran'
-    cur = 'https://github.com/imahdimir/u-d-firm-ISIC-in-codal'
+    cur = 'https://github.com/imahdimir/u-raw-d-codal_ir-nasheran'
     src = 'https://github.com/imahdimir/d-all-Codal-letters'
 
 ru = RepoUrl()
@@ -84,10 +85,10 @@ def main() :
     ##
     msk = dfs[cn.ctic].isin(dfa[cn.ctic])
     msk.all()
-
     ##
     dfa[cn.obsd] = pd.to_datetime('today').date()
-
+    ##
+    dfa = dfa.drop_duplicates()
     ##
     rp_targ = GithubData(ru.targ)
     rp_targ.clone()
@@ -106,9 +107,10 @@ def main() :
     ##
     tokp = '/Users/mahdi/Dropbox/tok.txt'
     tok = mu.get_tok_if_accessible(tokp)
-
     ##
-    msg = 'init'
+    msg = 'updated by: '
+    msg += ru.cur
+    ##
     rp_targ.commit_and_push(msg , user = rp_targ.user_name , token = tok)
 
     ##
