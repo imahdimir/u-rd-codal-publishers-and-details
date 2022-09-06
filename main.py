@@ -166,8 +166,6 @@ def main() :
     ##
     dft = gd_targ.read_data()
     ##
-    dft = pd.DataFrame()
-    ##
     dft = pd.concat([dft , dfa])
     ##
     dft = dft.drop_duplicates()
