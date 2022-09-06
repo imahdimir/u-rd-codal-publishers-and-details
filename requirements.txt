@@ -1,0 +1,4 @@
+pandas~=1.4.4
+githubdata~=8.1
+mirutil~=4.0
+persiantools~=3.0.1
