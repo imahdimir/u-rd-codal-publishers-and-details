@@ -14,7 +14,7 @@ from githubdata import GithubData
 from mirutil.async_requests import get_reps_texts_async
 from mirutil.df_utils import read_data_according_to_type as read_data
 from mirutil.df_utils import save_as_prq_wo_index as sprq
-from mirutil.utils import ret_clusters_indices as fu0
+from mirutil.utils import ret_clusters_indices as clus_ind
 
 
 class GDUrl :
@@ -88,7 +88,7 @@ def main() :
         df1 = df[msk]
         print(len(msk[msk]))
 
-        clus = fu0(df1)
+        clus = clus_ind(df1)
 
         for se in clus :
             print(se)
@@ -177,7 +177,7 @@ def main() :
         df1 = dfc[msk]
         print(len(msk[msk]))
 
-        clus = fu0(df1 , 20)
+        clus = clus_ind(df1 , 20)
 
         for se in clus :
             print(se)
@@ -208,6 +208,9 @@ def main() :
     ##
     dd = dd.drop_duplicates()
     ##
+    dd[c.obds] = pd.to_datetime('today').date()
+
+    ##
 
     ##
     gd_trg1 = GithubData(gdu.trg1)
@@ -223,7 +226,7 @@ def main() :
     ##
     sprq(dft , d1p)
     ##
-    msg = 'New Version by: '
+    msg = 'Updated by: '
     msg += gdu.cur
     ##
     gd_trg1.commit_and_push(msg)
