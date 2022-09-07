@@ -3,196 +3,234 @@
     """
 
 import asyncio
+import re
 import time
 from functools import partial
-from pathlib import Path
 
 import pandas as pd
+import requests
+from bs4 import BeautifulSoup
 from githubdata import GithubData
-from mirutil import async_requests as areq
-from mirutil import utils as mu
+from mirutil.async_requests import get_reps_texts_async
 from mirutil.df_utils import read_data_according_to_type as read_data
 from mirutil.df_utils import save_as_prq_wo_index as sprq
-from persiantools.characters import fa_to_ar
+from mirutil.utils import ret_clusters_indices as fu0
 
 
-class RepoUrl :
-    targ = 'https://github.com/imahdimir/raw-d-codal_ir-nasheran'
+class GDUrl :
+    trg0 = 'https://github.com/imahdimir/rd-codal-publishers'
+    trg1 = 'https://github.com/imahdimir/rd-codal-publisher-details'
     cur = 'https://github.com/imahdimir/u-raw-d-codal_ir-nasheran'
-    src = 'https://github.com/imahdimir/d-all-Codal-letters'
 
-ru = RepoUrl()
+gdu = GDUrl()
 
 class ColName :
-    ctic = 'CodalTicker'
-    sym = 'Symbol'
-    asym = 'ArSymbol'
-    aurl = 'aurl'
-    furl = 'furl'
-    art = 'art'
-    frt = 'frt'
-    obsd = 'ObsDate'
-    url = 'url'
+    pgn = 'pg_no'
+    pgurl = 'pg_url'
+    pgres = 'pg_res'
+    namad = 'نماد'
+    nurl = 'namad_url'
+    nres = 'namda_res'
+    merg = '4merge'
+    obds = 'ObsDate'
 
-cn = ColName()
+c = ColName()
 
 class Constant :
-    base_url = 'https://www.codal.ir/Company.aspx?Symbol='
+    base_url = 'https://my.codal.ir/fa/publishers/?page='
+    itmes_per_page = 12
 
 cte = Constant()
+
+def find_number_of_pages() :
+    res = requests.get(cte.base_url + '1')
+    soup = BeautifulSoup(res.text , 'html.parser')
+    ls = soup.find_all(class_ = 'text_record')
+    assert len(ls) == 1
+    ou = ls[0].text
+    ou = int(re.sub("[^0-9]" , "" , ou))
+    ou = ou // cte.itmes_per_page
+    ou += 1
+    return ou
+
+def find_sherkat_urls(res) :
+    soup = BeautifulSoup(res , 'html.parser')
+    ls = soup.find_all('a' , href = True)
+    ls = [x for x in ls if x['href'].startswith('/fa/publisher/')]
+    df = pd.DataFrame()
+    df[c.namad] = [x.text for x in ls]
+    df[c.namad] = df[c.namad].str.strip()
+    df[c.nurl] = [x['href'] for x in ls]
+    return df
 
 def main() :
     pass
 
-    ## get all codal letters data
-    gd_src = GithubData(ru.src)
-    dfs = gd_src.read_data()
     ##
-    gd_src.rmdir()
-
-    ## keep only codal tickers
-    dfs = dfs[[cn.ctic]]
-    dfs = dfs.drop_duplicates()
-    dfs = dfs.dropna()
-    ## relace space in codal tickers with +
-    dfs[cn.sym] = dfs[cn.ctic].str.replace(' ' , '+')
-    dfs[cn.asym] = dfs[cn.sym].apply(fa_to_ar)
-    ## add leading base url
-    dfs[cn.aurl] = cte.base_url + dfs[cn.asym]
+    pgs_no = find_number_of_pages()
+    pgs_no
     ##
-    clus = mu.return_clusters_indices(dfs)
-    fu = partial(areq.get_reps_texts_async)
+    df = pd.DataFrame()
+    df[c.pgn] = range(1 , pgs_no + 1)
     ##
-    for se in clus :
-        si = se[0]
-        ei = se[1] + 1
-        print(se)
-
-        inds = dfs.iloc[si : ei].index
-
-        aurls = dfs.loc[inds , cn.aurl]
-        dfs.loc[inds , cn.art] = asyncio.run(fu(aurls))
-
-        # break
-
+    df[c.pgurl] = cte.base_url + df[c.pgn].astype(str)
     ##
-    sprq(dfs , 't0.prq')
-
+    hdrs = {
+            'User-Agent' : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.114 Safari/537.36'
+            }
+    fu = partial(get_reps_texts_async , headers = hdrs)
     ##
-    dfs[cn.furl] = cte.base_url + dfs[cn.sym]
-    cls = mu.return_clusters_indices(dfs)
+    df[c.pgres] = None
+    df1 = df.copy()
     ##
-    for se in cls :
-        si = se[0]
-        ei = se[1] + 1
-        print(se)
+    while df1.shape[0] > 0 :
+        msk = df[c.pgres].isna()
+        df1 = df[msk]
+        print(len(msk[msk]))
 
-        inds = dfs.iloc[si : ei].index
+        clus = fu0(df1)
 
-        aurls = dfs.loc[inds , cn.furl]
-        dfs.loc[inds , cn.frt] = asyncio.run(fu(aurls))
+        for se in clus :
+            print(se)
+            inds = df1.iloc[se[0] : se[1]].index
 
-        time.sleep(3)
+            urls = df.loc[inds , c.pgurl]
+            df.loc[inds , c.pgres] = asyncio.run(fu(urls))
 
-        # break
+            time.sleep(2)
+
+            # break
 
     ##
-    sprq(dfs , 't00.prq')
-
+    sprq(df , 't0.prq')
     ##
-    msk = dfs[cn.frt].isna()
-    df1 = dfs[msk]
-
-    ##
-    cls = mu.return_clusters_indices(df1)
-    ##
-    for se in cls :
-        si = se[0]
-        ei = se[1] + 1
-        print(se)
-
-        inds = df1.iloc[si : ei].index
-
-        aurls = dfs.loc[inds , cn.furl]
-        dfs.loc[inds , cn.frt] = asyncio.run(fu(aurls))
-
-        time.sleep(3)
-
-        # break
-
-    ##
-    msk = dfs[cn.frt].isna()
-    df1 = dfs[msk]
-
-    ##
-    sprq(dfs , 't00.prq')
-    ##
-    dfs = read_data('t00.prq')
-
+    df = read_data('t0.prq')
     ##
     dfa = pd.DataFrame()
 
-    for _ , row in dfs.iterrows() :
-        _d0 = pd.read_html(row[cn.art])[0]
-        _d1 = pd.read_html(row[cn.frt])[0]
-
-        _d0 = pd.concat([_d0 , _d1] , axis = 0)
-
-        _d0[cn.ctic] = row[cn.ctic]
-        _d0[cn.url] = row[cn.aurl]
-
-        dfa = pd.concat([dfa , _d0] , axis = 0)
+    for _ , ro in df.iterrows() :
+        _df = pd.read_html(ro[c.pgres])[0]
+        _df[c.pgn] = ro[c.pgn]
+        _df[c.pgurl] = ro[c.pgurl]
+        dfa = pd.concat([dfa , _df])
 
     ##
-    dfa = dfa.drop_duplicates()
+    msk = dfa.duplicated(c.namad)
+    df1 = dfa[msk]
+    assert len(df1) == 1
+    ##
+    dfa = dfa.drop_duplicates(c.namad)
+    ##
+    dfa[c.merg] = dfa[c.namad].str.replace('\s' , '')
+    assert dfa[c.merg].is_unique
 
     ##
-    dfa.columns = [str(x) for x in dfa.columns]
-    sprq(dfa , 't10.prq')
-    ##
-    dfa = read_data('t10.prq')
+    dfb = pd.DataFrame()
+
+    for _ , ro in df.iterrows() :
+        _df = find_sherkat_urls(ro[c.pgres])
+        dfb = pd.concat([dfb , _df])
 
     ##
-    msk = dfs[cn.ctic].isin(dfa[cn.ctic])
-    assert msk.all()
+    msk = dfb.duplicated(c.namad)
+    df1 = dfb[msk]
+    assert len(df1) == 1
+    ##
+    dfb.drop_duplicates(subset = c.namad , inplace = True)
+    ##
+    dfb[c.merg] = dfb[c.namad].str.replace('\s' , '')
+    assert dfb[c.merg].is_unique
+    ##
+    dfc = dfa.merge(dfb , on = c.merg)
+    ##
+    dfc[c.nurl] = 'https://my.codal.ir' + dfc[c.nurl]
+    ##
+    dfc[c.obds] = pd.to_datetime('today').date()
+    ##
+
+    gd_trg0 = GithubData(gdu.trg0)
+    gd_trg0.overwriting_clone()
+    ##
+    d0p = gd_trg0.data_fp
+    d0 = read_data(d0p)
+    ##
+    d0 = pd.concat([d0 , dfc])
+    ##
+    d0.drop_duplicates(inplace = True)
+    ##
+    sprq(d0 , d0p)
+    ##
+    msg = 'data updated by: '
+    msg += gdu.cur
+    ##
+    gd_trg0.commit_and_push(msg)
+    ##
+    gd_trg0.rmdir()
+    ##
 
     ##
-    dfa[cn.obsd] = pd.to_datetime('today').date()
+    dfc[c.nres] = None
+    df1 = df.copy()
+    ##
+    while df1.shape[0] > 0 :
+        msk = dfc[c.nres].isna()
+        df1 = dfc[msk]
+        print(len(msk[msk]))
+
+        clus = fu0(df1 , 20)
+
+        for se in clus :
+            print(se)
+            inds = df1.iloc[se[0] : se[1]].index
+
+            urls = dfc.loc[inds , c.nurl]
+            dfc.loc[inds , c.nres] = asyncio.run(fu(urls))
+
+            time.sleep(1)
+
+            # break
+
+        # break
 
     ##
+    sprq(dfc , 't1.prq')
+    ##
+    dfc = read_data('t1.prq')
+    ##
+    dd = pd.DataFrame()
 
-    gd_targ = GithubData(ru.targ)
-    gd_targ.overwriting_clone()
+    for _ , ro in dfc.iterrows() :
+        _df = pd.read_html(ro[c.nres])[0]
+        _df[c.namad] = ro[c.namad + '_x']
+        _df[c.nurl] = ro[c.nurl]
+        dd = pd.concat([dd , _df])
+
     ##
-    dft = gd_targ.read_data()
+    dd = dd.drop_duplicates()
     ##
-    dft = pd.concat([dft , dfa])
+
+    ##
+    gd_trg1 = GithubData(gdu.trg1)
+    gd_trg1.overwriting_clone()
+    ##
+    d1p = gd_trg1.data_fp
+    ##
+    dft = gd_trg1.read_data()
+    ##
+    dft = pd.concat([dft , dd])
     ##
     dft = dft.drop_duplicates()
     ##
-    sprq(dft , gd_targ.data_fp)
+    sprq(dft , d1p)
+    ##
+    msg = 'New Version by: '
+    msg += gdu.cur
+    ##
+    gd_trg1.commit_and_push(msg)
 
     ##
-    msg = 'updated by: '
-    msg += ru.cur
-    ##
-    gd_targ.commit_and_push(msg)
 
-    ##
-
-    gd_src.rmdir()
-    gd_targ.rmdir()
-
-    ##
-    _2del = {
-            't0.prq'  : None ,
-            't00.prq' : None ,
-            't1.prq'  : None ,
-            't10.prq' : None ,
-            }
-
-    for pn in _2del.keys() :
-        Path(pn).unlink(missing_ok = True)
+    gd_trg1.rmdir()
 
     ##
 
@@ -206,11 +244,7 @@ if __name__ == "__main__" :
 ##
 # noinspection PyUnreachableCode
 if False :
-
     pass
-
-    ##
-
 
     ##
 
