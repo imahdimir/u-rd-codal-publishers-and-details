@@ -20,7 +20,7 @@ from mirutil.utils import ret_clusters_indices as fu0
 class GDUrl :
     trg0 = 'https://github.com/imahdimir/rd-codal-publishers'
     trg1 = 'https://github.com/imahdimir/rd-codal-publisher-details'
-    cur = 'https://github.com/imahdimir/u-raw-d-codal_ir-nasheran'
+    cur = 'https://github.com/imahdimir/u-rd-codal-publishers-and-details'
 
 gdu = GDUrl()
 
